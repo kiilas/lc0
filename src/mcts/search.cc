@@ -47,6 +47,8 @@ const char* Search::kMaxPrefetchBatchStr = "Max prefetch nodes, per NN call";
 const char* Search::kCpuctStr = "Cpuct MCTS option";
 const char* Search::kTemperatureStr = "Initial temperature";
 const char* Search::kTempDecayMovesStr = "Moves with temperature decay";
+const char* Search::kTempExponentialDecayRateStr = "Rate of exponential temperature decay";
+const char* Search::kTempExponentialDecayStr = "Use exponential decay";
 const char* Search::kNoiseStr = "Add Dirichlet noise at root node";
 const char* Search::kVerboseStatsStr = "Display verbose move stats";
 const char* Search::kAggressiveTimePruningStr =
@@ -78,6 +80,8 @@ void Search::PopulateUciParams(OptionsParser* options) {
   options->Add<FloatOption>(kTemperatureStr, 0.0f, 100.0f, "temperature") =
       0.0f;
   options->Add<IntOption>(kTempDecayMovesStr, 0, 100, "tempdecay-moves") = 0;
+  options->Add<FloatOption>(kTempExponentialDecayRateStr, 0.0f, 1.0f, "tempdecay-rate") = 0.95f;
+  options->Add<BoolOption>(kTempExponentialDecayStr, "exp-tempdecay", 'e') = false;
   options->Add<BoolOption>(kNoiseStr, "noise", 'n') = false;
   options->Add<BoolOption>(kVerboseStatsStr, "verbose-move-stats") = false;
   options->Add<FloatOption>(kAggressiveTimePruningStr, 0.0f, 10.0f,
@@ -390,13 +394,18 @@ std::pair<Move, Move> Search::GetBestMoveInternal() const
   if (!root_node_->HasChildren()) return {};
 
   float temperature = kTemperature;
-  if (temperature && kTempDecayMoves) {
-    int moves = played_history_.Last().GetGamePly() / 2;
-    if (moves >= kTempDecayMoves) {
-      temperature = 0.0;
-    } else {
-      temperature *=
-          static_cast<float>(kTempDecayMoves - moves) / kTempDecayMoves;
+  if (temperature) {
+    if(kTempExponentialDecay) {
+      int ply = played_history_.Last().GetGamePly();
+      temperature *= std::pow(kTempExponentialDecayRate, ply);
+    } else if(kTempDecayMoves) {
+      int moves = played_history_.Last().GetGamePly() / 2;
+      if (moves >= kTempDecayMoves) {
+        temperature = 0.0;
+      } else {
+        temperature *=
+            static_cast<float>(kTempDecayMoves - moves) / kTempDecayMoves;
+      }
     }
   }
 
